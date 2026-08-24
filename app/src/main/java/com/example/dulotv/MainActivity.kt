@@ -20,6 +20,6 @@ class MainActivity : AppCompatActivity() {
         }
         
         setContentView(webView)
-        webView.loadUrl("https://dulo.tv")
+        webView.loadUrl("https://dulo.gd")
     }
 }
