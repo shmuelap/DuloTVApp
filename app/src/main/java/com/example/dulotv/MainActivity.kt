@@ -1,6 +1,7 @@
 package com.example.dulotv
 
 import android.os.Bundle
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -17,14 +18,17 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            settings.mediaPlaybackRequiresUserGesture = false
             settings.setSupportMultipleWindows(false)
             settings.javaScriptCanOpenWindowsAutomatically = false
+
+            webChromeClient = WebChromeClient()
 
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val url = request?.url?.toString() ?: return false
                     
-                    if (url.startsWith("intent://") || !url.startsWith("http")) {
+                    if (url.startsWith("intent://") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
                         return true
                     }
                     return false
@@ -35,7 +39,7 @@ class MainActivity : AppCompatActivity() {
 
                     val injectScript = """
                         (function() {
-                            // 1. הזרקת CSS להסטת הניווט לשמאל והעלמת באנרים/חלוניות הודעה
+                            // 1. הסטת תפריט הניווט לצד שמאל
                             var style = document.createElement('style');
                             style.innerHTML = `
                                 div[class*="dock"], div[class*="menu"], nav, footer {
@@ -43,17 +47,11 @@ class MainActivity : AppCompatActivity() {
                                     right: auto !important;
                                     transform: none !important;
                                 }
-                                /* הסתרת דיאלוגים, באנרים ופופאפים של האתר והנגן */
-                                [class*="popover"], [class*="tooltip"], [class*="onboarding"],
-                                [class*="toast"], [class*="notice"], [class*="banner"], [role="dialog"] {
-                                    display: none !important;
-                                }
                             `;
                             document.head.appendChild(style);
 
-                            // 2. מנגנון זיהוי והסרה אקטיבי לחלוניות הודעה ("Got it", "VPN", "Skip")
-                            function dismissOverlays() {
-                                // לחיצה אוטומטית על כפתורי אישור/סגירה
+                            // 2. סגירה בטוחה: לחיצה על כפתורי אישור/סגירה בלבד (ללא מחיקת DIVs)
+                            function safeDismiss() {
                                 var buttons = document.querySelectorAll('button, a, div[role="button"]');
                                 buttons.forEach(function(btn) {
                                     var txt = (btn.innerText || '').trim().toLowerCase();
@@ -61,25 +59,9 @@ class MainActivity : AppCompatActivity() {
                                         btn.click();
                                     }
                                 });
-
-                                // הסרת אלמנטים המכילים את טקסט ההודעה
-                                var elements = document.querySelectorAll('div, section, article');
-                                elements.forEach(function(el) {
-                                    var text = el.innerText || '';
-                                    if (text.includes('VPN is no longer needed') || 
-                                        text.includes('WE\'VE UPGRADED') || 
-                                        text.includes('Tap, pause') || 
-                                        text.includes('reveal controls')) {
-                                        if (el.children.length < 15) {
-                                            el.style.display = 'none';
-                                            el.remove();
-                                        }
-                                    }
-                                });
                             }
 
-                            // הרצה מחזורית לניקוי חלונות שקופצים בדיליי לאחר טעינת הדף
-                            setInterval(dismissOverlays, 400);
+                            setInterval(safeDismiss, 500);
 
                             // 3. הוספת כפתור חיפוש לתפריט
                             setTimeout(function() {
