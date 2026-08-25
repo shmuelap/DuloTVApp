@@ -1,11 +1,13 @@
 package com.example.dulotv
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
@@ -21,13 +23,16 @@ class MainActivity : AppCompatActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.setSupportMultipleWindows(false)
             settings.javaScriptCanOpenWindowsAutomatically = false
+            
+            // הגדרות חשובות לניווט עם שלט D-Pad
+            isFocusable = true
+            isFocusableInTouchMode = true
 
             webChromeClient = WebChromeClient()
 
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val url = request?.url?.toString() ?: return false
-                    
                     if (url.startsWith("intent://") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
                         return true
                     }
@@ -39,11 +44,11 @@ class MainActivity : AppCompatActivity() {
 
                     val injectScript = """
                         (function() {
-                            // 1. הזרקת CSS להפיכת התפריט לסרגל צדי אנכי בצד שמאל
+                            // 1. הזרקת CSS ממוקד עבור התפריט
                             var style = document.createElement('style');
-                            style.id = 'custom-tv-styles';
+                            style.id = 'tv-custom-css';
                             style.innerHTML = `
-                                div[class*="dock"], div[class*="menu"], nav[class*="dock"] {
+                                #tv-sidebar {
                                     position: fixed !important;
                                     left: 15px !important;
                                     top: 50% !important;
@@ -51,57 +56,74 @@ class MainActivity : AppCompatActivity() {
                                     right: auto !important;
                                     transform: translateY(-50%) !important;
                                     flex-direction: column !important;
-                                    display: flex !important;
+                                    width: auto !important;
+                                    height: auto !important;
+                                    padding: 15px 10px !important;
+                                    border-radius: 20px !important;
+                                    background: rgba(15, 23, 42, 0.95) !important;
                                     z-index: 999999 !important;
-                                    padding: 12px 8px !important;
-                                    border-radius: 24px !important;
+                                    display: flex !important;
                                 }
-                                div[class*="dock"] > *, div[class*="menu"] > *, nav[class*="dock"] > * {
-                                    flex-direction: column !important;
-                                    margin: 6px 0 !important;
+                                #tv-sidebar > * {
+                                    margin: 10px 0 !important;
                                 }
                                 [class*="popover"], [class*="tooltip"], [class*="onboarding"],
                                 [class*="toast"], [class*="notice"], [class*="banner"], [role="dialog"] {
                                     display: none !important;
                                 }
                             `;
-                            if (!document.getElementById('custom-tv-styles')) {
+                            if (!document.getElementById('tv-custom-css')) {
                                 document.head.appendChild(style);
                             }
 
-                            // 2. הזרקה רציפה של כפתור החיפוש המקורי בראש התפריט האנכי
-                            function injectSearchButton() {
-                                var nav = document.querySelector('nav') || 
-                                          document.querySelector('div[class*="dock"]') || 
-                                          document.querySelector('div[class*="menu"]');
-                                
-                                if (nav) {
-                                    var container = nav.querySelector('div') || nav;
-                                    
-                                    if (!document.getElementById('custom-tv-search')) {
-                                        var searchBtn = document.createElement('button');
-                                        searchBtn.id = 'custom-tv-search';
-                                        searchBtn.setAttribute('tabindex', '0');
-                                        searchBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
-                                        searchBtn.style.cssText = 'background: transparent; border: none; padding: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-bottom: 4px;';
+                            // 2. איתור דינמי של התפריט התחתון והפיכתו לסרגל צד + חיפוש
+                            function setupSidebar() {
+                                var elements = document.querySelectorAll('div, nav');
+                                elements.forEach(function(el) {
+                                    var compStyle = window.getComputedStyle(el);
+                                    // מזהה אלמנטים שמקובעים לתחתית המסך
+                                    if (compStyle.position === 'fixed' && compStyle.bottom === '0px' && el.childElementCount >= 4) {
+                                        el.id = 'tv-sidebar';
                                         
-                                        searchBtn.onclick = function(e) {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            var siteSearch = document.querySelector('button[aria-label*="search"], a[href*="search"], [class*="search"]');
-                                            if (siteSearch && siteSearch !== searchBtn) {
-                                                siteSearch.click();
-                                            } else {
+                                        if (!document.getElementById('custom-tv-search')) {
+                                            var searchBtn = document.createElement('button');
+                                            searchBtn.id = 'custom-tv-search';
+                                            searchBtn.innerHTML = '🔍';
+                                            searchBtn.style.cssText = 'background: transparent; border: none; font-size: 24px; padding: 8px; cursor: pointer; color: white; display: flex; justify-content: center;';
+                                            
+                                            searchBtn.onclick = function(e) {
+                                                e.preventDefault();
                                                 window.location.href = 'https://dulo.gd/search';
-                                            }
-                                        };
-                                        
-                                        container.insertBefore(searchBtn, container.firstChild);
+                                            };
+                                            el.insertBefore(searchBtn, el.firstChild);
+                                        }
                                     }
-                                }
+                                });
                             }
 
-                            // 3. סגירת הודעות קופצות
+                            // 3. לכידת כפתור Enter בשלט להפעלת סרטים
+                            document.addEventListener('keydown', function(e) {
+                                // 13 זה כפתור ה-Enter/Center בשלט
+                                if (e.keyCode === 13 || e.keyCode === 179) {
+                                    var video = document.querySelector('video');
+                                    if (video) {
+                                        // מוודא שאנחנו לא עומדים על כפתור אחר כרגע
+                                        var active = document.activeElement;
+                                        var isInteractive = active && (active.tagName === 'BUTTON' || active.tagName === 'A' || active.tagName === 'INPUT');
+                                        
+                                        if (!isInteractive) {
+                                            e.preventDefault();
+                                            if (video.paused) {
+                                                video.play();
+                                            } else {
+                                                video.pause();
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
+                            // 4. העלמת פופאפים בטוחה
                             function safeDismiss() {
                                 var buttons = document.querySelectorAll('button, a, div[role="button"]');
                                 buttons.forEach(function(btn) {
@@ -113,9 +135,9 @@ class MainActivity : AppCompatActivity() {
                             }
 
                             setInterval(function() {
-                                injectSearchButton();
+                                setupSidebar();
                                 safeDismiss();
-                            }, 400);
+                            }, 500);
                         })();
                     """.trimIndent()
 
@@ -126,5 +148,16 @@ class MainActivity : AppCompatActivity() {
         
         setContentView(webView)
         webView.loadUrl("https://dulo.gd")
+
+        // מנגנון ניהול כפתור ה'חזור' (Back Button)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack() // חוזר דף אחד אחורה באתר
+                } else {
+                    finish() // סוגר את האפליקציה אם אנחנו בדף הראשי
+                }
+            }
+        })
     }
 }
