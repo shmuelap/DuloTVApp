@@ -39,18 +39,69 @@ class MainActivity : AppCompatActivity() {
 
                     val injectScript = """
                         (function() {
-                            // 1. הסטת תפריט הניווט לצד שמאל
+                            // 1. הזרקת CSS להפיכת התפריט לסרגל צדי אנכי בצד שמאל
                             var style = document.createElement('style');
+                            style.id = 'custom-tv-styles';
                             style.innerHTML = `
-                                div[class*="dock"], div[class*="menu"], nav, footer {
-                                    left: 20px !important;
+                                div[class*="dock"], div[class*="menu"], nav[class*="dock"] {
+                                    position: fixed !important;
+                                    left: 15px !important;
+                                    top: 50% !important;
+                                    bottom: auto !important;
                                     right: auto !important;
-                                    transform: none !important;
+                                    transform: translateY(-50%) !important;
+                                    flex-direction: column !important;
+                                    display: flex !important;
+                                    z-index: 999999 !important;
+                                    padding: 12px 8px !important;
+                                    border-radius: 24px !important;
+                                }
+                                div[class*="dock"] > *, div[class*="menu"] > *, nav[class*="dock"] > * {
+                                    flex-direction: column !important;
+                                    margin: 6px 0 !important;
+                                }
+                                [class*="popover"], [class*="tooltip"], [class*="onboarding"],
+                                [class*="toast"], [class*="notice"], [class*="banner"], [role="dialog"] {
+                                    display: none !important;
                                 }
                             `;
-                            document.head.appendChild(style);
+                            if (!document.getElementById('custom-tv-styles')) {
+                                document.head.appendChild(style);
+                            }
 
-                            // 2. סגירה בטוחה: לחיצה על כפתורי אישור/סגירה בלבד (ללא מחיקת DIVs)
+                            // 2. הזרקה רציפה של כפתור החיפוש המקורי בראש התפריט האנכי
+                            function injectSearchButton() {
+                                var nav = document.querySelector('nav') || 
+                                          document.querySelector('div[class*="dock"]') || 
+                                          document.querySelector('div[class*="menu"]');
+                                
+                                if (nav) {
+                                    var container = nav.querySelector('div') || nav;
+                                    
+                                    if (!document.getElementById('custom-tv-search')) {
+                                        var searchBtn = document.createElement('button');
+                                        searchBtn.id = 'custom-tv-search';
+                                        searchBtn.setAttribute('tabindex', '0');
+                                        searchBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+                                        searchBtn.style.cssText = 'background: transparent; border: none; padding: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-bottom: 4px;';
+                                        
+                                        searchBtn.onclick = function(e) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            var siteSearch = document.querySelector('button[aria-label*="search"], a[href*="search"], [class*="search"]');
+                                            if (siteSearch && siteSearch !== searchBtn) {
+                                                siteSearch.click();
+                                            } else {
+                                                window.location.href = 'https://dulo.gd/search';
+                                            }
+                                        };
+                                        
+                                        container.insertBefore(searchBtn, container.firstChild);
+                                    }
+                                }
+                            }
+
+                            // 3. סגירת הודעות קופצות
                             function safeDismiss() {
                                 var buttons = document.querySelectorAll('button, a, div[role="button"]');
                                 buttons.forEach(function(btn) {
@@ -61,32 +112,10 @@ class MainActivity : AppCompatActivity() {
                                 });
                             }
 
-                            setInterval(safeDismiss, 500);
-
-                            // 3. הוספת כפתור חיפוש לתפריט
-                            setTimeout(function() {
-                                var navBar = document.querySelector('nav') || 
-                                             document.querySelector('div[class*="dock"]') || 
-                                             document.querySelector('div[class*="menu"]');
-                                             
-                                if (navBar && !document.getElementById('custom-tv-search')) {
-                                    var searchBtn = document.createElement('button');
-                                    searchBtn.id = 'custom-tv-search';
-                                    searchBtn.innerHTML = '🔍';
-                                    searchBtn.style.cssText = 'background: transparent; border: none; color: white; font-size: 22px; padding: 8px 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;';
-                                    
-                                    searchBtn.onclick = function() {
-                                        var existingSearch = document.querySelector('button[aria-label*="search"], [class*="search"], a[href*="search"]');
-                                        if (existingSearch) {
-                                            existingSearch.click();
-                                        } else {
-                                            window.location.href = 'https://dulo.gd/search';
-                                        }
-                                    };
-                                    
-                                    navBar.insertBefore(searchBtn, navBar.firstChild);
-                                }
-                            }, 1200);
+                            setInterval(function() {
+                                injectSearchButton();
+                                safeDismiss();
+                            }, 400);
                         })();
                     """.trimIndent()
 
