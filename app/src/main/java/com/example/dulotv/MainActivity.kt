@@ -1,7 +1,6 @@
 package com.example.dulotv
 
 import android.os.Bundle
-import android.view.KeyEvent
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -24,7 +23,6 @@ class MainActivity : AppCompatActivity() {
             settings.setSupportMultipleWindows(false)
             settings.javaScriptCanOpenWindowsAutomatically = false
             
-            // הגדרות חשובות לניווט עם שלט D-Pad
             isFocusable = true
             isFocusableInTouchMode = true
 
@@ -44,11 +42,21 @@ class MainActivity : AppCompatActivity() {
 
                     val injectScript = """
                         (function() {
-                            // 1. הזרקת CSS ממוקד עבור התפריט
-                            var style = document.createElement('style');
-                            style.id = 'tv-custom-css';
+                            // 1. הזרקת עיצוב CSS: הסתרת תפריט עליון והעברת תפריט האייקונים לצד שמאל
+                            var style = document.getElementById('tv-override-style');
+                            if (!style) {
+                                style = document.createElement('style');
+                                style.id = 'tv-override-style';
+                                document.head.appendChild(style);
+                            }
                             style.innerHTML = `
-                                #tv-sidebar {
+                                /* הסתרת התפריט העליון של הדפדפן/מחשב למניעת כפילות */
+                                header, div[class*="header"], div[class*="top-nav"] {
+                                    display: none !important;
+                                }
+
+                                /* הפיכת תפריט האייקונים לסרגל אנכי בצד שמאל */
+                                div[class*="dock"], nav, div[class*="bottom-nav"] {
                                     position: fixed !important;
                                     left: 15px !important;
                                     top: 50% !important;
@@ -56,58 +64,51 @@ class MainActivity : AppCompatActivity() {
                                     right: auto !important;
                                     transform: translateY(-50%) !important;
                                     flex-direction: column !important;
-                                    width: auto !important;
-                                    height: auto !important;
-                                    padding: 15px 10px !important;
-                                    border-radius: 20px !important;
-                                    background: rgba(15, 23, 42, 0.95) !important;
-                                    z-index: 999999 !important;
                                     display: flex !important;
+                                    z-index: 999999 !important;
+                                    background: rgba(15, 23, 42, 0.95) !important;
+                                    padding: 12px 8px !important;
+                                    border-radius: 20px !important;
+                                    border: 1px solid rgba(255, 255, 255, 0.1) !important;
                                 }
-                                #tv-sidebar > * {
-                                    margin: 10px 0 !important;
+
+                                /* סידור האייקונים בטור אנכי */
+                                div[class*="dock"] > *, nav > * {
+                                    flex-direction: column !important;
+                                    margin: 6px 0 !important;
                                 }
+
+                                /* הסתרת פופאפים ובאנרים קופצים */
                                 [class*="popover"], [class*="tooltip"], [class*="onboarding"],
                                 [class*="toast"], [class*="notice"], [class*="banner"], [role="dialog"] {
                                     display: none !important;
                                 }
                             `;
-                            if (!document.getElementById('tv-custom-css')) {
-                                document.head.appendChild(style);
+
+                            // 2. הזרקת כפתור חיפוש (🔍) בראש תפריט האייקונים
+                            function addSearchIcon() {
+                                var dock = document.querySelector('div[class*="dock"]') || document.querySelector('nav');
+                                if (dock && !document.getElementById('tv-search-icon')) {
+                                    var searchBtn = document.createElement('a');
+                                    searchBtn.id = 'tv-search-icon';
+                                    searchBtn.href = '/search';
+                                    searchBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+                                    searchBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; padding: 8px; cursor: pointer; border-radius: 50%; margin-bottom: 4px;';
+                                    
+                                    searchBtn.onclick = function(e) {
+                                        e.preventDefault();
+                                        window.location.href = 'https://dulo.gd/search';
+                                    };
+
+                                    dock.insertBefore(searchBtn, dock.firstChild);
+                                }
                             }
 
-                            // 2. איתור דינמי של התפריט התחתון והפיכתו לסרגל צד + חיפוש
-                            function setupSidebar() {
-                                var elements = document.querySelectorAll('div, nav');
-                                elements.forEach(function(el) {
-                                    var compStyle = window.getComputedStyle(el);
-                                    // מזהה אלמנטים שמקובעים לתחתית המסך
-                                    if (compStyle.position === 'fixed' && compStyle.bottom === '0px' && el.childElementCount >= 4) {
-                                        el.id = 'tv-sidebar';
-                                        
-                                        if (!document.getElementById('custom-tv-search')) {
-                                            var searchBtn = document.createElement('button');
-                                            searchBtn.id = 'custom-tv-search';
-                                            searchBtn.innerHTML = '🔍';
-                                            searchBtn.style.cssText = 'background: transparent; border: none; font-size: 24px; padding: 8px; cursor: pointer; color: white; display: flex; justify-content: center;';
-                                            
-                                            searchBtn.onclick = function(e) {
-                                                e.preventDefault();
-                                                window.location.href = 'https://dulo.gd/search';
-                                            };
-                                            el.insertBefore(searchBtn, el.firstChild);
-                                        }
-                                    }
-                                });
-                            }
-
-                            // 3. לכידת כפתור Enter בשלט להפעלת סרטים
+                            // 3. לכידת מקש Enter/OK בשלט לניגון ועצירת וידאו
                             document.addEventListener('keydown', function(e) {
-                                // 13 זה כפתור ה-Enter/Center בשלט
                                 if (e.keyCode === 13 || e.keyCode === 179) {
                                     var video = document.querySelector('video');
                                     if (video) {
-                                        // מוודא שאנחנו לא עומדים על כפתור אחר כרגע
                                         var active = document.activeElement;
                                         var isInteractive = active && (active.tagName === 'BUTTON' || active.tagName === 'A' || active.tagName === 'INPUT');
                                         
@@ -123,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                                 }
                             });
 
-                            // 4. העלמת פופאפים בטוחה
+                            // 4. העלמת הודעות קופצות
                             function safeDismiss() {
                                 var buttons = document.querySelectorAll('button, a, div[role="button"]');
                                 buttons.forEach(function(btn) {
@@ -135,9 +136,9 @@ class MainActivity : AppCompatActivity() {
                             }
 
                             setInterval(function() {
-                                setupSidebar();
+                                addSearchIcon();
                                 safeDismiss();
-                            }, 500);
+                            }, 400);
                         })();
                     """.trimIndent()
 
@@ -149,13 +150,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(webView)
         webView.loadUrl("https://dulo.gd")
 
-        // מנגנון ניהול כפתור ה'חזור' (Back Button)
+        // מנגנון כפתור 'חזור' בשלט
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
-                    webView.goBack() // חוזר דף אחד אחורה באתר
+                    webView.goBack()
                 } else {
-                    finish() // סוגר את האפליקציה אם אנחנו בדף הראשי
+                    finish()
                 }
             }
         })
